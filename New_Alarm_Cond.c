@@ -23,8 +23,8 @@
  */
 typedef struct alarm_tag {
     struct alarm_tag    *link;
-	int 				alarm_id
-	int					group_id
+	  int 				        alarm_id;
+	  int					        group_id;
     int                 seconds;
     time_t              time;   /* seconds from EPOCH */
     char                message[128];
@@ -35,9 +35,42 @@ pthread_cond_t alarm_cond = PTHREAD_COND_INITIALIZER;
 alarm_t *alarm_list = NULL;
 time_t current_alarm = 0;
 
+
 /*
- * Insert alarm entry on list, in order.
- */
+  A.3.2.2
+  Change alarm specified by alarm_id
+  group_id to new specified group_id
+  time to new specified time
+  message to new specified message
+*/
+void change_alarm(alarm_t *new)
+ {
+   int changed = time(NULL);
+   alarm_t **last, *next;
+
+   last = &alarm_list;
+   next = *last;
+
+
+   while(next!=NULL)
+   {
+     fprintf(stdout,"here\n");
+     if (next->alarm_id == new->alarm_id)
+     {
+       next->group_id = new->group_id;
+       next->time = time(NULL) + new->time;
+       strcpy(next->message, new->message);
+       fprintf(stdout, "Alarm(%d) Changed at %d: Group(%d) %d %s\n",next->alarm_id, changed, next->group_id, next->time, next->message);
+       break;
+     }
+     last = &next->link;
+     next = next->link;
+   }
+ }
+
+ /*
+  * Insert alarm entry on list, in order.
+  */
 void alarm_insert (alarm_t *alarm)
 {
     int status;
@@ -45,7 +78,7 @@ void alarm_insert (alarm_t *alarm)
 
     /*
      * LOCKING PROTOCOL:
-     * 
+     *
      * This routine requires that the caller have locked the
      * alarm_mutex!
      */
@@ -148,7 +181,7 @@ void *alarm_thread (void *arg)
         } else
             expired = 1;
         if (expired) {
-            printf ("(%d) %s\n", alarm->seconds, alarm->message);
+            fprintf(stdout,"(%d) %s\n", alarm->seconds, alarm->message);
             free (alarm);
         }
     }
@@ -178,55 +211,87 @@ int main (int argc, char *argv[])
          * (%64[^\n]), consisting of up to 64 characters
          * separated from the seconds by whitespace.
          */
-		 
-		 
+
+
 		 //Alarm> Start_Alarm(2345): Group(13) 50
-		 
-		 
-		 if ((sscanf(line, "Start_Alarm(%d): Group(%d) %d %128[^\n]",&alarm->alarm_id, &alarm->group_id, alarm->seconds, alarm->message)<4) && ((sscanf(line, "Change_Alarm(%d): Group(%d) %d %128[^\n]",&alarm->alarm_id, &alarm->group_id, alarm->seconds, alarm->message)<4))
-        {
-            fprintf(stderr, "Bad command\n");
-            free(alarm);
-            continue;
+
+
+    if ((sscanf(line, "start(%d): group(%d) %d %128[^\n]",&alarm->alarm_id, &alarm->group_id, &alarm->seconds, alarm->message)<4) && (sscanf(line, "change(%d): group(%d) %d %128[^\n]",&alarm->alarm_id, &alarm->group_id, &alarm->seconds, alarm->message)<4))
+    {
+      fprintf (stderr, "Bad command\n");
+      free (alarm);
+    }
+    else if (!(sscanf(line, "start(%d): group(%d) %d %128[^\n]",&alarm->alarm_id, &alarm->group_id, &alarm->seconds, alarm->message)<4))
+    //else if (!(sscanf(line, "Start_Alarm(%d): Group(%d) %d %128[^\n]",&alarm->alarm_id, &alarm->group_id, &alarm->seconds, alarm->message)<4))
+    {
+      status = pthread_mutex_lock (&alarm_mutex);
+          if (status != 0)
+              err_abort (status, "Lock mutex");
+          alarm->time = time (NULL) + alarm->seconds;
+          /*
+           * Insert the new alarm into the list of alarms,
+           * sorted by alarm id.
+           */
+
+           //A3.2.1
+           //Prints out the required message and a new line is prompted
+          alarm_insert (alarm);
+          fprintf(stdout, "Alarm(%d) Inserted by Main Thread %d Into Alarm List at %d: Group(%d) %d %s\n",alarm->alarm_id, pthread_self(), alarm->seconds, alarm->group_id, alarm->time,alarm->message);
+          //
+
+          status = pthread_mutex_unlock (&alarm_mutex);
+          if (status != 0)
+              err_abort (status, "Unlock mutex");
+      }
+      else if(!(sscanf(line, "change(%d): group(%d) %d %128[^\n]",&alarm->alarm_id, &alarm->group_id, &alarm->seconds, alarm->message)<4))
+//      else if(!(sscanf(line, "Change_Alarm(%d): Group(%d) %d %128[^\n]",&alarm->alarm_id, &alarm->group_id, alarm->seconds, alarm->message)<4))
+  		{
+  			//Change alarm
+        status = pthread_mutex_lock (&alarm_mutex);
+        if (status != 0){
+            err_abort (status, "Lock mutex");
         }
-		else if (!(sscanf(line, "Start_Alarm(%d): Group(%d) %d %128[^\n]",&alarm->alarm_id, &alarm->group_id, alarm->seconds, alarm->message)<4))
-		{
-			status = pthread_mutex_lock (&alarm_mutex);
-            if (status != 0)
-                err_abort (status, "Lock mutex");
-            alarm->time = time (NULL) + alarm->seconds;
-            /*
-             * Insert the new alarm into the list of alarms,
-             * sorted by expiration time.
-             */
-            alarm_insert (alarm);
-            status = pthread_mutex_unlock (&alarm_mutex);
-            if (status != 0)
-                err_abort (status, "Unlock mutex");
-		}
-		else if(!(sscanf(line, "Change_Alarm(%d): Group(%d) %d %128[^\n]",&alarm->alarm_id, &alarm->group_id, alarm->seconds, alarm->message)<4))
-		{
-			//Change alarm
-		}
-		
-		 
-        // if (sscanf (line, "%d %64[^\n]", 
-            // &alarm->seconds, alarm->message) < 2) {
-            // fprintf (stderr, "Bad command\n");
-            // free (alarm);
+
+        //Change alarm settings to new alarm
+        change_alarm(alarm);
+
+        status = pthread_mutex_unlock (&alarm_mutex);
+        if (status != 0){
+            err_abort (status, "Unlock mutex");
+          }
+  		}
+
+    // {
+		// 	status = pthread_mutex_lock (&alarm_mutex);
+    //         if (status != 0)
+    //             err_abort (status, "Lock mutex");
+    //         alarm->time = time (NULL) + alarm->seconds;
+    //         /*
+    //          * Insert the new alarm into the list of alarms,
+    //          * sorted by expiration time.
+    //          */
+    //         alarm_insert (alarm);
+    //         status = pthread_mutex_unlock (&alarm_mutex);
+    //         if (status != 0)
+    //             err_abort (status, "Unlock mutex");
+		// }
+        // if (sscanf (line, "%d %64[^\n]",
+        //     &alarm->seconds, alarm->message) < 2) {
+        //     fprintf (stderr, "Bad command\n");
+        //     free (alarm);
         // } else {
-            // status = pthread_mutex_lock (&alarm_mutex);
-            // if (status != 0)
-                // err_abort (status, "Lock mutex");
-            // alarm->time = time (NULL) + alarm->seconds;
-            // /*
-             // * Insert the new alarm into the list of alarms,
-             // * sorted by expiration time.
-             // */
-            // alarm_insert (alarm);
-            // status = pthread_mutex_unlock (&alarm_mutex);
-            // if (status != 0)
-                // err_abort (status, "Unlock mutex");
+        //     status = pthread_mutex_lock (&alarm_mutex);
+        //     if (status != 0)
+        //         err_abort (status, "Lock mutex");
+        //     alarm->time = time (NULL) + alarm->seconds;
+        //     /*
+        //      * Insert the new alarm into the list of alarms,
+        //      * sorted by expiration time.
+        //      */
+        //     alarm_insert (alarm);
+        //     status = pthread_mutex_unlock (&alarm_mutex);
+        //     if (status != 0)
+        //         err_abort (status, "Unlock mutex");
         // }
     }
 }

@@ -23,9 +23,11 @@
  */
 typedef struct alarm_tag {
     struct alarm_tag    *link;
+	int 				alarm_id
+	int					group_id
     int                 seconds;
     time_t              time;   /* seconds from EPOCH */
-    char                message[64];
+    char                message[128];
 } alarm_t;
 
 pthread_mutex_t alarm_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -50,7 +52,7 @@ void alarm_insert (alarm_t *alarm)
     last = &alarm_list;
     next = *last;
     while (next != NULL) {
-        if (next->time >= alarm->time) {
+        if (next->alarm_id >= alarm->alarm_id) {
             alarm->link = next;
             *last = alarm;
             break;
@@ -176,12 +178,20 @@ int main (int argc, char *argv[])
          * (%64[^\n]), consisting of up to 64 characters
          * separated from the seconds by whitespace.
          */
-        if (sscanf (line, "%d %64[^\n]", 
-            &alarm->seconds, alarm->message) < 2) {
-            fprintf (stderr, "Bad command\n");
-            free (alarm);
-        } else {
-            status = pthread_mutex_lock (&alarm_mutex);
+		 
+		 
+		 //Alarm> Start_Alarm(2345): Group(13) 50
+		 
+		 
+		 if ((sscanf(line, "Start_Alarm(%d): Group(%d) %d %128[^\n]",&alarm->alarm_id, &alarm->group_id, alarm->seconds, alarm->message)<4) && ((sscanf(line, "Change_Alarm(%d): Group(%d) %d %128[^\n]",&alarm->alarm_id, &alarm->group_id, alarm->seconds, alarm->message)<4))
+        {
+            fprintf(stderr, "Bad command\n");
+            free(alarm);
+            continue;
+        }
+		else if (!(sscanf(line, "Start_Alarm(%d): Group(%d) %d %128[^\n]",&alarm->alarm_id, &alarm->group_id, alarm->seconds, alarm->message)<4))
+		{
+			status = pthread_mutex_lock (&alarm_mutex);
             if (status != 0)
                 err_abort (status, "Lock mutex");
             alarm->time = time (NULL) + alarm->seconds;
@@ -193,6 +203,30 @@ int main (int argc, char *argv[])
             status = pthread_mutex_unlock (&alarm_mutex);
             if (status != 0)
                 err_abort (status, "Unlock mutex");
-        }
+		}
+		else if(!(sscanf(line, "Change_Alarm(%d): Group(%d) %d %128[^\n]",&alarm->alarm_id, &alarm->group_id, alarm->seconds, alarm->message)<4))
+		{
+			//Change alarm
+		}
+		
+		 
+        // if (sscanf (line, "%d %64[^\n]", 
+            // &alarm->seconds, alarm->message) < 2) {
+            // fprintf (stderr, "Bad command\n");
+            // free (alarm);
+        // } else {
+            // status = pthread_mutex_lock (&alarm_mutex);
+            // if (status != 0)
+                // err_abort (status, "Lock mutex");
+            // alarm->time = time (NULL) + alarm->seconds;
+            // /*
+             // * Insert the new alarm into the list of alarms,
+             // * sorted by expiration time.
+             // */
+            // alarm_insert (alarm);
+            // status = pthread_mutex_unlock (&alarm_mutex);
+            // if (status != 0)
+                // err_abort (status, "Unlock mutex");
+        // }
     }
 }

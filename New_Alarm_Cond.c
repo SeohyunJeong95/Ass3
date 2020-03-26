@@ -14,6 +14,8 @@
 #include <time.h>
 #include "errors.h"
 
+#define CHANGE 1
+#define ADD 0
 /*
  * The "alarm" structure now contains the time_t (time since the
  * Epoch, in seconds) for each alarm, so that they can be
@@ -30,12 +32,31 @@ typedef struct alarm_tag {
     char                message[128];
 } alarm_t;
 
+/*
+  Display_tag to keep all the alarm with one group_id
+*/
+typedef struct display_tag {
+  struct display_tag  *link;
+  alarm_t *           alarm;
+  pthread_cond_t      display_cond; // = PTHREAD_COND_INITIALIZER;
+} display_t;
+
+// Linked List to link all display_tags together for easier search
+typedef struct linked_list {
+  struct linked_list  *link;
+  display_t *         display;
+} ll;
+/*
+*/
 pthread_mutex_t alarm_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t alarm_cond = PTHREAD_COND_INITIALIZER;
 alarm_t *alarm_list = NULL;
+ll *display_t_list = NULL;
 time_t current_alarm = 0;
+alarm_t *curr_alarm_t = NULL;
 
-
+//Check for a changed query
+int changed=ADD;
 /*
   A.3.2.2
   Change alarm specified by alarm_id
@@ -60,6 +81,7 @@ void change_alarm(alarm_t *new)
        next->group_id = new->group_id;
        next->time = time(NULL) + new->time;
        strcpy(next->message, new->message);
+       curr_alarm_t = next;
        fprintf(stdout, "Alarm(%d) Changed at %d: Group(%d) %d %s\n",next->alarm_id, changed, next->group_id, next->time, next->message);
        break;
      }
@@ -88,6 +110,9 @@ void alarm_insert (alarm_t *alarm)
         if (next->alarm_id >= alarm->alarm_id) {
             alarm->link = next;
             *last = alarm;
+
+            //defines current alarm
+            curr_alarm_t = alarm;
             break;
         }
         last = &next->link;
@@ -123,9 +148,28 @@ void alarm_insert (alarm_t *alarm)
     }
 }
 
-/*
- * The alarm thread's start routine.
- */
+ void create_display_thread(){
+   //loop through ll and check for group_id
+   // if changed=ADD we loop for group and create as needed
+   // if changed=changed we loope for group_id and change correctly
+
+   //changed=ADD
+   if(!changed){
+     //if we have no display threads
+     if(ll==NULL){
+       display_t create;
+       create = (display_t*)malloc (sizeof (display_t));
+       if (create == NULL){
+         eerno_abort("Allocate display_thread");
+       }
+       create->
+     }
+   }
+ }
+
+ /*
+  * The alarm thread's start routine.
+  */
 void *alarm_thread (void *arg)
 {
     alarm_t *alarm;
@@ -154,6 +198,9 @@ void *alarm_thread (void *arg)
             if (status != 0)
                 err_abort (status, "Wait on cond");
             }
+        //creates a display thread from the current alarm -- Line 109
+        create_display_thread();
+
         alarm = alarm_list;
         alarm_list = alarm->link;
         now = time (NULL);
@@ -227,6 +274,10 @@ int main (int argc, char *argv[])
       status = pthread_mutex_lock (&alarm_mutex);
           if (status != 0)
               err_abort (status, "Lock mutex");
+
+          //Boolean for changed alarm, affects create_display_thread
+          //FALSE
+          changed=ADD;
           alarm->time = time (NULL) + alarm->seconds;
           /*
            * Insert the new alarm into the list of alarms,
@@ -254,6 +305,10 @@ int main (int argc, char *argv[])
 
         //Change alarm settings to new alarm
         change_alarm(alarm);
+
+        //Boolean for changed alarm, affects create_display_thread
+        //TRUE
+        changed = CHANGE;
 
         status = pthread_mutex_unlock (&alarm_mutex);
         if (status != 0){

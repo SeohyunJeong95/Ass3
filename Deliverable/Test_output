@@ -1,0 +1,69 @@
+Testing 
+
+A3.1a  → same as A3.2.1
+1. Start_Alarm properly working.
+
+
+Alarm> Start_Alarm(10): Group(50) 50 test1 
+Alarm(10) Inserted by Main Thread -1190711672 Into Alarm List at 1586143545: Group(50)  test1
+
+
+2. Start_Alarm request with wrong format.
+
+
+Alarm> Start_Alarm: Group(10) 500 Wrongformat1				//no Alarm_Id
+Bad Command
+Alarm> Start_Alarm: Group() 500 Wrongformat2					//no Group_Id
+Bad Command
+Alarm> Start_Alarm(10): Group(20) 50 						//no message
+Bad Command
+Alarm> Start_Alarm(10): Group(20) Wrongformat4 				//no time
+Bad Command
+
+
+A3.1b → same as A3.2.2
+1. Change_Alarm properly working.
+
+
+Alarm> Start_Alarm(10): Group(10) 50 Test1 
+Alarm(10) Inserted by Main Thread 399906376 Into Alarm List at 1586144078: Group(10) Test1
+Alarm> Change_Alarm(10): Group(20) 50 Change1
+Display Thread <thread-id> Has Stopped Printing Message of Alarm(10) at 1586144128: Changed Group(20) Change1
+Alarm(10) Changed at 1586144096: Group(20) Change1
+
+
+2. Change_Alarm wrong format
+
+
+Alarm> Change_Alarm: Group(10) 10 Wrongformat1			//no Alarm_Id
+Bad Command
+Alarm> Change_Alarm(10): Group 50 Wrongformat2			//no Group_Id
+Bad Command
+Alarm> Change_Alarm(10): Group(50)  50					//no message
+Bad Command
+Alarm> Change_Alarm(10): Group(50)  Wrongformat4			//no time
+Bad Command
+
+
+A3.3A (NOT Possible we do not have display thread responsible for this action)
+A3.3A (NOT Possible we do not have remove methods removing alarms that are expired)
+
+
+
+A3.5
+1. Same Alarm_ID, BUT different Group_ID for Change request.
+
+
+Alarm> Start_Alarm(50): Group(50) 500 Test
+Alarm(50) Inserted by Main Thread 1883273000 Into Alarm List at 1586144841: Group(50) Test
+Alarm> Change_Alarm(50): Group(10) 500 differentGroup
+Display Thread <thread-id> Has Stopped Printing Message of Alarm(50) at 1586145341: Changed Group(10) differentGroup
+
+
+2. Same Alarm_ID, AND same Group_ID
+
+
+Alarm> Start_Alarm(10): Group(10) 500 Test2
+Alarm(10) Inserted by Main Thread 1883273000 Into Alarm List at 1586144904: Group(10) Test2
+Alarm> Change_Alarm(10): Group(10) 500 sameGroup
+Alarm(10) Changed at 1586144927: Group(10) sameGroup

@@ -330,7 +330,7 @@ void change_alarm(alarm_t *alarm) {
 
           curr_alarm = alarm_list;
 
-          findSmallest();
+          //findSmallest();
   #ifdef DEBUG
           next = alarm_list;
           printf ("[list: ");
@@ -361,7 +361,7 @@ void change_alarm(alarm_t *alarm) {
                       err_abort (status, "Cond timedwait");
               }
               if (!expired)
-                  alarm_insert(curr_alarm);
+                  insert_alarm(curr_alarm);
           } else
               expired = 1;
           if (expired) {
@@ -382,17 +382,6 @@ int main (int argc, char *argv[])
     time_t now;
     append_list * to_append;
 
-
-    if(sem_init(&main_semaphore,0,1) < 0){
-        printf("Error creating semaphore!");
-        exit(1);
-    }
-
-    if(sem_init(&display_sem,0,1) < 0){
-        printf("Error creating semaphore!");
-        exit(1);
-    }
-
     status = pthread_create (&thread, NULL, alarm_thread, NULL);
     if (status != 0)
         err_abort (status, "Create alarm thread");
@@ -406,71 +395,49 @@ int main (int argc, char *argv[])
             errno_abort ("Allocate alarm");
 
     //parse input into two alarm request. "Start_Alarm" and "Change_Alarm"
-    if (sscanf(line, "%30[^(](%d): group(%d) %d %128[^\n]",
-        keyword,&alarm->alarm_id, &alarm->group_id, &alarm->seconds, alarm->message) == 4) {
+      if ((sscanf(line, "start(%d): group(%d) %d %128[^\n]",&alarm->alarm_id, &alarm->group_id, &alarm->seconds, alarm->message)<4)
+          && (sscanf(line, "change(%d): group(%d) %d %128[^\n]",&alarm->alarm_id, &alarm->group_id, &alarm->seconds, alarm->message)<4))
+          {
+            fprintf (stderr, "Bad command\n");
+            free (alarm);
+          }
 
-          //The strcmp() compares two strings character by character.
-          if (strcmp(keyword, "Start_Alarm") == 0) {
+      else if (!(sscanf(line, "start(%d): group(%d) %d %128[^\n]",&alarm->alarm_id, &alarm->group_id, &alarm->seconds, alarm->message)<4))
+         {
+            now = time(NULL);
+            alarm->link = NULL;
+            alarm->changed = 0;
 
-              now = time(NULL);
-              alarm->link = NULL;
-              alarm->changed = 0;
+            status = sem_wait(&rw_mutex);
+            if (status != 0)
+                err_abort (status, "Lock mutex");
 
-              status = sem_wait(&main_semaphore);
-                  if (status != 0)
-                      err_abort (status, "Lock mutex");
-
-              alarm_insert (alarm);
-              fprintf(stdout, "Alarm(%d) Inserted by Main Thread %d Into Alarm List at %d: Group(%d) %d %s\n",
+            insert_alarm (alarm);
+            fprintf(stdout, "Alarm(%d) Inserted by Main Thread %d Into Alarm List at %d: Group(%d) %d %s\n",
                       alarm->alarm_id, pthread_self(), alarm->seconds, alarm->group_id, now, alarm->message);
 
-              to_append = (append_list *) malloc(sizeof(append_list));
-              to_append->next = NULL;
-              to_append->alarm = alarm;
-              to_append->last = NULL;
-              //If the list is null, make the list reference the element
-              if(list_to_append == NULL) {
-                  list_to_append = to_append;
-              } else {
-                  //Otherwise, append in the next available
-                  if(list_to_append->next == NULL){
-                    list_to_append->next = to_append;
-                    list_to_append->last = to_append;
-                  } else {
-                list_to_append->last->next = to_append;
-                list_to_append->last = to_append;
-              }
-              }
-              append_flag = 1;
-              alarm_thread_flag = 1;
+            status = sem_post(&rw_mutex);
+            if (status != 0)
+            err_abort (status, "Unlock mutex");
+          }
 
-                  status = sem_post(&main_semaphore);
-                  if (status != 0)
-                      err_abort (status, "Unlock mutex");
-            }
-
-            else if (strcmp(keyword, "Change_Alarm") == 0) {
-
+        else if (!(sscanf(line, "change(%d): group(%d) %d %128[^\n]",&alarm->alarm_id, &alarm->group_id, &alarm->seconds, alarm->message)<4))
+             {
                   now = time(NULL);
 
-                  status = sem_wait(&main_semaphore);
+                  status = sem_wait(&rw_mutex);
                   if (status != 0)
                     err_abort (status, "Lock mutex");
 
                   change_alarm(alarm);
 
                   fprintf(stdout, "Alarm(%d) Changed at %d: Group(%d) %d %s\n",
-                          next->alarm_id, now, next->group_id, next->time, next->message);
-                  alarm_thread_flag = 1;
-                  change_flag = 1;
+                          alarm->alarm_id, now, alarm->group_id, alarm->time, alarm->message);
 
-                  status = sem_post(&main_semaphore);
+
+                  status = sem_post(&rw_mutex);
                   if (status != 0)
                       err_abort (status, "Unlock mutex");
             }
-          } else {
-              fprintf (stderr, "Bad command\n");
-              free (alarm);
-            }
-      }
+        }
 }
